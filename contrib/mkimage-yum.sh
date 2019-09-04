@@ -66,7 +66,11 @@ fi
 
 # default to Core group if not specified otherwise
 if [ ${#install_groups[*]} -eq 0 ]; then
+ if [ "$(uname -m)" == "sw_64" ]; then
+   :
+ else
    install_groups=('Core')
+ fi
 fi
 
 target=$(mktemp -d --tmpdir $(basename $0).XXXXXX)
@@ -99,15 +103,40 @@ fi
 
 if [[ -n "$install_packages" ]];
 then
+#    yum -c "$yum_config" --installroot="$target" --releasever=/ --setopt=tsflags=nodocs \
+#        --setopt=group_package_types=mandatory -y install "${install_packages[*]}"
     yum -c "$yum_config" --installroot="$target" --releasever=/ --setopt=tsflags=nodocs \
-        --setopt=group_package_types=mandatory -y install "${install_packages[@]}"
+        --setopt=group_package_types=mandatory -y install coreutils dhclient iproute iputils passwd procps-ng vim-minimal openssh-server yum
+#        --setopt=group_package_types=mandatory -y install yum yum-utils iproute iputils net-tools vim-minimal
+
+#    # no kernel-headers rpm found in yum repo.
+#    tar zxvf /home/kernel-sw6a-headers.tgz -C "$target"
+#    rpm --root="$target" -ivh --nodeps $(repoquery --location glibc-headers)
+
+#    pip install --upgrade pip
+
 fi
 
 yum -c "$yum_config" --installroot="$target" -y clean all
 
+mkdir -p "$target"/etc/sysconfig
+
 cat > "$target"/etc/sysconfig/network <<EOF
 NETWORKING=yes
 HOSTNAME=localhost.localdomain
+EOF
+
+cat > "$target"/etc/yum.repos.d/neokylin.repo <<EOF
+[Neokylin]
+name = NeoKylin 7.2 everything
+baseurl=http://download.cs2c.com.cn/neokylin/server/everything/7.2/sw_64/
+enabled=1
+gpgcheck=0
+EOF
+
+cat >> "$target"/etc/rc.d/rc.local << EOF
+ip link set eth0 up
+dhclient
 EOF
 
 # effectively: febootstrap-minimize --keep-zoneinfo --keep-rpmdb --keep-services "$target".
@@ -148,3 +177,4 @@ tar --numeric-owner -c -C "$target" . | docker import - $name:$version
 docker run -i -t --rm $name:$version /bin/bash -c 'echo success'
 
 rm -rf "$target"
+#ls "$target"
